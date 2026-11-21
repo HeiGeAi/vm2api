@@ -5,6 +5,10 @@ git 里只有源码。`bin/`、`web/dist`、`share/crag` 与 `share/wrap-cli` �
 - `web/dist` 与 `kin-api-kernel` 由源码编译（镜像构建内或本机）。
 - 生产验证过的 linux amd64 产物（`kin-kernel`、`kin-codex-kernel`、`kin-oauth-auth`、`kin-computer`、`kin-worker`、`kin-egress`、`kin-slot-gate`、`cli-node`、`cc-node`、crag kernel、glibc 2.39 shim）放在独立的 payload Release，由 [`deploy/payload.json`](../deploy/payload.json) 按 sha256 / 大小钉住。`npm run fetch:payload` 下载并校验到 `bin/` / `share/`；镜像构建同样按清单下载，校验不过即失败。
 
+当历史 Release 的文件被替换时，清单可以为单个文件声明官方备用来源。当前从 `v1.4.067` 获取原版 `kin-oauth-auth` 和 `kin-worker`，从 `v1.4.034-amd64` 对应的固定 OCI 层读取原版 `cli-node`。OCI 层按摘要校验，提取时需要 `tar`，产物仍按原有大小和 SHA-256 校验。
+
+`VM2API_PAYLOAD_BASE_URL` 可指向完整的镜像源，全部文件仍按原 Release 目录及 asset 名下载。执行 `--pin` 会为新 Release 清除旧的逐文件来源。
+
 换 payload：把新文件放到本机对应路径，然后
 
 ```bash

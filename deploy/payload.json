@@ -18,7 +18,8 @@
       "path": "bin/kin-oauth-auth",
       "asset": "kin-oauth-auth",
       "size": 14430374,
-      "sha256": "fe64b4ea20ca694863f9041fd02fd2c0c4e6d30cce99e273ee693d7d730a8095"
+      "sha256": "fe64b4ea20ca694863f9041fd02fd2c0c4e6d30cce99e273ee693d7d730a8095",
+      "release": "v1.4.067"
     },
     {
       "path": "bin/kin-computer",
@@ -30,7 +31,8 @@
       "path": "bin/kin-worker",
       "asset": "kin-worker",
       "size": 16455001,
-      "sha256": "d6b29f1144cd389696fe11edd6b5a024499bfc598da6a9ac96a4c7a9f9d6071b"
+      "sha256": "d6b29f1144cd389696fe11edd6b5a024499bfc598da6a9ac96a4c7a9f9d6071b",
+      "release": "v1.4.067"
     },
     {
       "path": "bin/kin-egress",
@@ -48,7 +50,12 @@
       "path": "share/wrap-cli/cli-node",
       "asset": "cli-node",
       "size": 27933052,
-      "sha256": "8484c4c58f4b7782a190f7cab7c8aa5d1f706ae26b2d2a5cafe81af070f0611b"
+      "sha256": "8484c4c58f4b7782a190f7cab7c8aa5d1f706ae26b2d2a5cafe81af070f0611b",
+      "oci": {
+        "digest": "sha256:d56ceef6be9c047eb392d13c55f5bf3920de98a35ccb0f2ddc562c77254ad50e",
+        "size": 66241625,
+        "member": "opt/vm2api/image-wrap-cli/cli-node"
+      }
     },
     {
       "path": "share/wrap-cli/cc-node",
