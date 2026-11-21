@@ -1,22 +1,27 @@
 /**
  * Live SOCKS5 + CRS HTTP stability.
  * Does not use slot OAuth. Does not write credential files.
- * Enable with KIN_LIVE_NET=1.
+ * Run as root inside a SOCKS-bound Linux slot with KIN_LIVE_NET=1.
+ * Set KIN_LIVE_DIRECT_IP to the host's IPv4 as seen by the probe endpoint,
+ * and KIN_LIVE_CREDENTIAL_DIR to the slot's .claude directory.
+ * KIN_LIVE_IP_URL optionally selects a trusted HTTPS IPv4 probe (default: ipify).
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import https from 'node:https'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
+import { isIPv4 } from 'node:net'
+import path from 'node:path'
 
 const LIVE = process.env.KIN_LIVE_NET === '1'
 const UID = 10001
 const GID = 987
-const SERVER_IP = '166.88.96.199'
 const ROUNDS = 5
 
 function httpsText({
   hostname,
+  port,
   path = '/',
   method = 'GET',
   headers = {},
@@ -36,6 +41,7 @@ function httpsText({
       const spec = JSON.parse(process.env.KIN_SPEC)
       const req = https.request({
         hostname: spec.hostname,
+        port: spec.port,
         path: spec.path,
         method: spec.method,
         headers: spec.headers || {},
@@ -62,7 +68,7 @@ function httpsText({
         gid,
         env: {
           ...process.env,
-          KIN_SPEC: JSON.stringify({ hostname, path, method, headers, body, timeoutMs }),
+          KIN_SPEC: JSON.stringify({ hostname, port, path, method, headers, body, timeoutMs }),
         },
         stdio: ['ignore', 'pipe', 'pipe'],
       },
@@ -87,32 +93,43 @@ function httpsText({
   })
 }
 
-function credMtimes() {
-  const files = [
-    '/opt/kin-gateway/vms/vm-01/cli-home/.claude/credentials.json',
-    '/opt/kin-gateway/vms/vm-01/cli-home/.claude/.credentials.json',
-  ]
-  const out = {}
-  for (const f of files) {
+function credentialFileStats() {
+  const dir = process.env.KIN_LIVE_CREDENTIAL_DIR
+  assert.ok(dir && path.isAbsolute(dir), 'KIN_LIVE_CREDENTIAL_DIR must name the slot credential directory')
+  const stats = {}
+  for (const name of ['credentials.json', '.credentials.json']) {
     try {
-      out[f] = fs.statSync(f).mtimeMs
-    } catch {
-      out[f] = null
+      const stat = fs.statSync(path.join(dir, name))
+      assert.ok(stat.isFile(), `${name} must be a regular file`)
+      stats[name] = { ino: stat.ino, size: stat.size, mtimeMs: stat.mtimeMs, ctimeMs: stat.ctimeMs }
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error
     }
   }
-  return out
+  assert.ok(Object.keys(stats).length, 'no credential file found in KIN_LIVE_CREDENTIAL_DIR')
+  return stats
 }
 
 test('uid 10001 HTTPS egress is SOCKS, not the VPS IP', { skip: !LIVE }, async () => {
+  const directIp = process.env.KIN_LIVE_DIRECT_IP || ''
+  assert.ok(isIPv4(directIp), 'KIN_LIVE_DIRECT_IP must be the host IPv4 reported by the probe')
+  const probe = new URL(process.env.KIN_LIVE_IP_URL || 'https://api.ipify.org/')
+  assert.equal(probe.protocol, 'https:', 'the IPv4 probe must use HTTPS')
   const ips = []
   const times = []
   for (let i = 0; i < ROUNDS; i++) {
     const t0 = Date.now()
-    const r = await httpsText({ hostname: 'api.ipify.org', path: '/', headers: { accept: 'text/plain' } })
+    const r = await httpsText({
+      hostname: probe.hostname,
+      port: probe.port,
+      path: `${probe.pathname}${probe.search}`,
+      headers: { accept: 'text/plain' },
+    })
     times.push(Date.now() - t0)
+    assert.equal(r.status, 200, `round ${i} IP probe status`)
     const ip = String(r.body || '').trim()
-    assert.match(ip, /^\d+\.\d+\.\d+\.\d+$/, `round ${i} body=${r.body}`)
-    assert.notEqual(ip, SERVER_IP)
+    assert.ok(isIPv4(ip), `round ${i} did not return an IPv4 address`)
+    assert.notEqual(ip, directIp, `round ${i} used the host's direct exit`)
     ips.push(ip)
   }
   assert.equal(new Set(ips).size, 1, `egress IPs drifted: ${ips.join(',')}`)
@@ -122,7 +139,7 @@ test('uid 10001 HTTPS egress is SOCKS, not the VPS IP', { skip: !LIVE }, async (
 })
 
 test('uid 10001 HTTP to api.anthropic.com is stable (fake token, no cred write)', { skip: !LIVE }, async () => {
-  const before = credMtimes()
+  const before = credentialFileStats()
   const statuses = []
   const times = []
   for (let i = 0; i < ROUNDS; i++) {
@@ -147,7 +164,7 @@ test('uid 10001 HTTP to api.anthropic.com is stable (fake token, no cred write)'
     statuses.push(r.status)
     assert.ok(r.status === 401 || r.status === 403, `round ${i} unexpected ${r.status} ${r.body}`)
   }
-  const after = credMtimes()
+  const after = credentialFileStats()
   assert.deepEqual(after, before)
   const avg = times.reduce((a, b) => a + b, 0) / times.length
   assert.equal(new Set(statuses).size, 1)
