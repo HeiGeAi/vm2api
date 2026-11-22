@@ -60,6 +60,14 @@ jobs:
         run: |
           node scripts/fetch-payload.mjs
           node scripts/fetch-payload.mjs --check
+      - name: live slot SSH and SOCKS regression
+        timeout-minutes: 4
+        run: |
+          if [ ! -x /usr/sbin/sshd ]; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends openssh-server
+          fi
+          sudo env "PATH=$PATH" bash test/deploy/smoke_live_slot.sh
       - name: native CLI packaging unit tests
         run: python3 -m unittest discover -s test/deploy -p test_native_cli.py -v
       - run: npm run test:unit
